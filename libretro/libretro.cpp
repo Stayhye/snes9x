@@ -220,6 +220,36 @@ static int pointer_pressed_last_y = 0;
 
 static bool setting_superscope_reverse_buttons = false;
 
+// The frontend's VFS opens paths stdio can't, like Android's saf:// folders.
+static struct retro_vfs_interface *vfs = NULL;
+
+static void *vfs_open(const char *path)
+{
+    return vfs->open(path, RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_NONE);
+}
+
+static int64 vfs_read(void *f, void *buf, uint64 len)
+{
+    return vfs->read((struct retro_vfs_file_handle *) f, buf, len);
+}
+
+static int64 vfs_seek(void *f, int64 offset, int whence)
+{
+    return vfs->seek((struct retro_vfs_file_handle *) f, offset, whence);
+}
+
+static int64 vfs_tell(void *f)
+{
+    return vfs->tell((struct retro_vfs_file_handle *) f);
+}
+
+static void vfs_close(void *f)
+{
+    vfs->close((struct retro_vfs_file_handle *) f);
+}
+
+static const S9xRP2040FileOps vfs_file_ops = { vfs_open, vfs_read, vfs_seek, vfs_tell, vfs_close };
+
 void retro_set_environment(retro_environment_t cb)
 {
     environ_cb = cb;
@@ -287,6 +317,10 @@ void retro_set_environment(retro_environment_t cb)
     };
 
     environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
+
+    struct retro_vfs_interface_info vfs_info = { 1, NULL };
+    vfs = cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_info) ? vfs_info.iface : NULL;
+    S9xRP2040CartSetFileOps(vfs ? &vfs_file_ops : NULL);
 }
 
 char *get_cursor_color(const char *name)
